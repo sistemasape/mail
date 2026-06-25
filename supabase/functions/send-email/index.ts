@@ -28,8 +28,7 @@ serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        // IMPORTANTE: Na conta gratuita do Resend, você só pode enviar emails DE 'onboarding@resend.dev' 
-        // ou de um domínio próprio validado.
+        // IMPORTANTE: Na conta gratuita do Resend, só enviamos a partir deste email
         from: `Email App <onboarding@resend.dev>`, 
         to: recipients,
         subject: subject,
