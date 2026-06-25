@@ -110,8 +110,9 @@ export async function sendEmail(payload: {
 
   const senderName = user.user_metadata?.full_name ?? user.email
 
-  // 1. Salva na pasta "enviados" do remetente no banco de dados
-  const dbResult = await supabase.from('emails').insert({
+  // Salva na pasta "enviados" do remetente
+  // O banco de dados (via Trigger) se encarregará de enviar o e-mail real e entregar internamente.
+  return supabase.from('emails').insert({
     user_id:     user.id,
     folder:      'sent',
     sender_addr: user.email,
@@ -121,27 +122,6 @@ export async function sendEmail(payload: {
     body:        payload.body,
     is_read:     true,
   })
-
-  if (dbResult.error) throw dbResult.error
-
-  // 2. Chama a Edge Function para enviar e-mail real para o mundo externo
-  // Importante: Só vai funcionar se a Edge Function estiver publicada no Supabase 
-  // e o RESEND_API_KEY estiver configurado!
-  const { error: edgeError } = await supabase.functions.invoke('send-email', {
-    body: {
-      recipients: payload.recipients,
-      subject: payload.subject,
-      body: payload.body,
-      sender_name: senderName,
-      sender_addr: user.email
-    }
-  })
-
-  if (edgeError) {
-    console.warn("E-mail salvo nos enviados, mas falhou ao enviar externamente:", edgeError)
-  }
-
-  return dbResult
 }
 
 export async function searchEmails(query: string) {

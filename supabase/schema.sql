@@ -150,6 +150,47 @@ create trigger on_email_sent
   for each row execute function public.deliver_internal_emails();
 
 -- -------------------------------------------------------
+-- Extensão para chamadas HTTP
+-- -------------------------------------------------------
+create extension if not exists "pg_net";
+
+-- -------------------------------------------------------
+-- Trigger: Disparo de e-mails para o mundo externo (Resend)
+-- -------------------------------------------------------
+create or replace function public.send_external_emails()
+returns trigger language plpgsql security definer as $$
+declare
+  payload jsonb;
+begin
+  if new.folder = 'sent' then
+    -- Prepara o JSON para a API do Resend
+    payload := jsonb_build_object(
+      'from', 'Email App <onboarding@resend.dev>',
+      'to', new.recipients,
+      'subject', new.subject,
+      'html', '<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;"><p style="color: #6b7280; font-size: 14px;">Você recebeu uma nova mensagem de <strong>' || new.sender_name || '</strong> (' || new.sender_addr || ') através do Email App.</p><hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" /><div style="color: #111827; font-size: 16px; line-height: 1.5; white-space: pre-wrap;">' || new.body || '</div></div>'
+    );
+
+    -- Faz a requisição HTTP (Roda de forma assíncrona no Supabase)
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer re_P6pZKwUh_CVJdd73uhunuRts6AB1qwx9U'
+      ),
+      body := payload
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_email_sent_external on public.emails;
+create trigger on_email_sent_external
+  after insert on public.emails
+  for each row execute function public.send_external_emails();
+
+-- -------------------------------------------------------
 -- Exemplos de busca full-text
 -- -------------------------------------------------------
 -- select * from emails
