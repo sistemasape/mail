@@ -119,6 +119,37 @@ create trigger emails_updated_at
   for each row execute function public.set_updated_at();
 
 -- -------------------------------------------------------
+-- Trigger: Entrega de e-mails internos
+-- -------------------------------------------------------
+create or replace function public.deliver_internal_emails()
+returns trigger language plpgsql security definer as $$
+declare
+  recipient_email text;
+  recipient_id uuid;
+begin
+  -- Dispara apenas quando um e-mail for salvo em "sent"
+  if new.folder = 'sent' then
+    foreach recipient_email in array new.recipients
+    loop
+      -- Procura o ID do usuário de destino baseado no email
+      select id into recipient_id from auth.users where email = recipient_email;
+      
+      -- Se o usuário existir, cria uma cópia na "inbox" dele
+      if recipient_id is not null then
+        insert into public.emails (user_id, folder, sender_id, sender_name, sender_addr, recipients, subject, body, is_read, is_starred)
+        values (recipient_id, 'inbox', new.user_id, new.sender_name, new.sender_addr, new.recipients, new.subject, new.body, false, false);
+      end if;
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger on_email_sent
+  after insert on public.emails
+  for each row execute function public.deliver_internal_emails();
+
+-- -------------------------------------------------------
 -- Exemplos de busca full-text
 -- -------------------------------------------------------
 -- select * from emails
